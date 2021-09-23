@@ -35,25 +35,25 @@ class Digest:
             self.bins = len(self.bins)//2 * [0] + [self.bins[i] + self.bins[i+1] for i in range(0, len(self.bins), 2)]
         bin_i = int((value - self.bins_start) / self.bins_width)
         assert bin_i >= 0
-        #print(f'{value=}, {self.bins=}, {bin_i=}, {self.bins_width=}, {self.bins_start=}, {self.bins_end=}')
         self.bins[bin_i] += 1
 
     def get_snapshot(self):
-        return Snapshot(self.n, self.min_found, self.max_found, self.mean, self.bins_width, {self.bins_start + self.bins_width * i: bin_value / sum(self.bins) for i, bin_value in enumerate(self.bins)})
+        return Snapshot(self.n, self.min_found, self.max_found, self.mean, self.bins_width, {self.bins_start + self.bins_width * i: bin_value / sum(self.bins) for i, bin_value in enumerate(self.bins) if bin_value})
 
-def show_plot(snapshots_queue):
+def _run_plot(snapshots_queue):
     def redraw():
         try:
             snapshot = snapshots_queue.get(False)
         except queue.Empty:
             return
 
+        plt.clf()
         plt.bar(snapshot.pdf.keys(), snapshot.pdf.values(), width=snapshot.bins_width)
         format_number = lambda n: f'{float(f"{n:.4g}"):g}'
         plt.xlabel('Result')
         plt.ylabel('Probability')
         #plt.ylim([0, 1])
-        #plt.yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
+        plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
         mode = max(snapshot.pdf.keys(), key=snapshot.pdf.__getitem__)
         plt.title(f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {format_number(mode)}±{format_number(snapshot.bins_width/2)} - Max: {format_number(snapshot.max)}')
         plt.draw()
@@ -62,27 +62,34 @@ def show_plot(snapshots_queue):
     redraw()
     plt.show(block=False)
     while True:
-        plt.clf()
         redraw()
         try:
             fig.canvas.flush_events()
         except:
             break
 
-def plot_sample(fn, n=1e6, n_bins=20):
+def plot(fn, n=1e6, n_bins=100):
     snapshots_queue = multiprocessing.Queue()
 
-    plot_process = multiprocessing.Process(target=show_plot, args=(snapshots_queue,))
+    plot_process = multiprocessing.Process(target=_run_plot, args=(snapshots_queue,))
     plot_process.start()
 
 
     digest = Digest(n_bins=n_bins, seed_value=fn())
-    for _ in range(n-1):
+    i = 0
+    while i < n-1:
+        i += 1
         digest.update(fn())
         if snapshots_queue.empty():
             snapshots_queue.put(digest.get_snapshot())
 
-    return digest
+    last_snapshot = digest.get_snapshot()
+    snapshots_queue.put(last_snapshot)
+    return last_snapshot
+
+import random
+def d(n):
+    return random.randint(1, n)
 
 if __name__ == '__main__':
     import random, time
@@ -96,6 +103,6 @@ if __name__ == '__main__':
     results = []
     for i in range(1000):
         results.append(max(0.5, random.random()))
-    plot_sample(lambda: time.sleep(0.00001) or flip_or_bust(), n=10000)
-    #plot_sample(lambda: (None, max(0.5, random.random()))[1], n=100000000)
+    #plot_sample(lambda: time.sleep(0.00001) or flip_or_bust(), n=10000)
+    plot(lambda: max(0.5, random.random()), n=100000000)
     #plot_sample(lambda: time.sleep(0.01) or random.choice([1, 2]), n=1000)
