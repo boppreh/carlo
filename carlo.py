@@ -133,60 +133,99 @@ class Digest:
 Snapshot = namedtuple('Snapshot', 'n min max mean bins_width bins')
 
 def _run_plot(receiver_pipe):
+    """
+    Continually pulls snapshots from the given pipe and displays them
+    interactively with matplotlib until the user closes the window.
+    """
+    # Black magic helper function to format a number to 4 significant places.
+    format_number = lambda n: f'{float(f"{n:.4g}"):g}'
 
     def draw(snapshot):
+        """  Updates the rendering with the given snapshot. """
         plt.clf()
-        #print(snapshot.bins)
+        # We have computed the bins and bar heights already, so use `.bar()`
+        # instead of `.hist()`.
         plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width)
-        format_number = lambda n: f'{float(f"{n:.4g}"):g}'
         plt.xlabel('Result')
         plt.ylabel('Probability')
-        #plt.ylim([0, 1])
+        # Formats Y axis with 0% to 100% instead of 0 to 1.
         plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
         mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
         plt.title(f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {format_number(mode)}±{format_number(snapshot.bins_width/2)} - Max: {format_number(snapshot.max)}')
         plt.draw()
 
-    snapshot = receiver_pipe.recv()
     fig = plt.figure()
+    # Blocks until the first snapshot is provided to avoid showing incorrect data.
+    snapshot = receiver_pipe.recv()
     draw(snapshot)
     plt.show(block=False)
     while True:
+        # The receiver pipe will contain at most one snapshot, and by receiving
+        # it we signal to the sender that they should prepare a new one. If a
+        # snapshot is not available, render the previous one again.
         if receiver_pipe.poll():
             snapshot = receiver_pipe.recv()
         draw(snapshot)
         try:
             fig.canvas.flush_events()
         except:
+            # When the window closes this method throws "_tkinter.TclError", but
+            # that's too unrelated from this code to import. Just catch everything.
             break
 
-def plot(sequence, n=float('inf'), n_bins=100, is_int=None):
-    if callable(sequence):
-        fn = sequence
-        sequence = (fn() for _ in itertools.count())
+def plot(sequence_or_fn, n=float('inf'), n_bins=100, is_int=None):
+    """
+    Plots a sequence of values, or the results of repeatedly calling the given
+    function. The statistics of the values is continually updated and shown in
+    an interactive window to the user.
+
+    - `sequence_or_fn`: if a list, tuple, or generator of numbers is given,
+    compute streaming statistics on all values. If a function is given,
+    repeatedly call it with no arguments and plot the returned numbers.
+    - `n`: plot at most this many values. Defaults to infinite.
+    - `n_bins`: maximum number of bins to spit the values into. To deal with the
+    streaming values, the actual number of bins will be between n_bins/2 and n_bins.
+    - `is_int`: is True, forces the start and end values of bins to be
+    integers. If None, automatically decides this based on the seed value.
+    """
+    if callable(sequence_or_fn):
+        sequence = (sequence_or_fn() for _ in itertools.count())
     else:
-        sequence = iter(sequence)
+        sequence = iter(sequence_or_fn)
 
     receiver_pipe, sender_pipe = multiprocessing.Pipe(duplex=False)
 
+    # Run plotting window in a separate process to minimize the performance impact
+    # of plotting on the computation of the sequence, and to avoid the computation
+    # from lagging the plotting window.
     plot_process = multiprocessing.Process(target=_run_plot, args=(receiver_pipe,))
     plot_process.start()
 
-
     digest = Digest(n_bins=n_bins, seed_value=next(sequence), is_int=None)
+    # Manual counting with a while loop to accommodate `n=float('inf')`.
     i = 0
-    while i < n-1 and plot_process.is_alive():
-        i += 1
-        digest.update(next(sequence))
-        if not receiver_pipe.poll():
-            sender_pipe.send(digest.get_snapshot())
+    # The plot_process will die when the user closes the window, and we should
+    # stop the computation too.
+    try:
+        while i < n-1 and plot_process.is_alive():
+            i += 1
+            digest.update(next(sequence))
+            # The plotting window has just consumed a snapshot, give it another one.
+            if not receiver_pipe.poll():
+                sender_pipe.send(digest.get_snapshot())
+    except StopIteration:
+        pass
 
+    # Ensure that the final state of the sequence is shown.
     last_snapshot = digest.get_snapshot()
     sender_pipe.send(last_snapshot)
+
+    # Probably nobody will use this, but it's easy to return the last snapshot.
     return last_snapshot
 
 from random import randint
 def d(n):
+    """ Generates a random number by rolling a `n`-sided dice, e.g. d(6). """
     return randint(1, n)
 
 if __name__ == '__main__':
@@ -195,11 +234,16 @@ if __name__ == '__main__':
     from random import *
 
     if len(sys.argv) > 1:
+        # Usage:
+        #     $ python -m carlo 'd(6)+d(12)'
         sequence = lambda: eval(' '.join(sys.argv[1:]))
     else:
+        # TODO: fix broken example
+        # Usage:
+        #     $ echo "1 2 3" | python -m carlo
         def stdin_numbers():
             for line in sys.stdin:
-                yield from re.findall(r'\d+\.?\d*', line)
+                yield from map(float, re.findall(r'\d+\.?\d*', line))
         sequence = stdin_numbers()
 
     print(plot(sequence))
