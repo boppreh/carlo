@@ -3,9 +3,8 @@ from matplotlib import pyplot as plt
 import matplotlib.ticker as mtick
 from collections import namedtuple
 import itertools
-import queue
 
-Snapshot = namedtuple('Snapshot', 'n min max mean bins_width pdf')
+Snapshot = namedtuple('Snapshot', 'n min max mean bins_width bins')
 
 class Digest:
     def __init__(self, n_bins, seed_value=0):
@@ -41,21 +40,19 @@ class Digest:
     def get_snapshot(self):
         return Snapshot(self.n, self.min_found, self.max_found, self.mean, self.bins_width, {self.bins_start + self.bins_width * i: bin_value / sum(self.bins) for i, bin_value in enumerate(self.bins) if bin_value})
 
-def _run_plot(snapshots_queue):
+def _run_plot(receiver_pipe):
     def redraw():
-        try:
-            snapshot = snapshots_queue.get(False)
-        except queue.Empty:
-            return
+        if receiver_pipe.poll():
+            snapshot = receiver_pipe.recv()
 
         plt.clf()
-        plt.bar(snapshot.pdf.keys(), snapshot.pdf.values(), width=snapshot.bins_width)
+        plt.bar(snapshot.bins.keys(), snapshot.bins.values(), width=snapshot.bins_width)
         format_number = lambda n: f'{float(f"{n:.4g}"):g}'
         plt.xlabel('Result')
         plt.ylabel('Probability')
         #plt.ylim([0, 1])
         plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
-        mode = max(snapshot.pdf.keys(), key=snapshot.pdf.__getitem__)
+        mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
         plt.title(f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {format_number(mode)}±{format_number(snapshot.bins_width/2)} - Max: {format_number(snapshot.max)}')
         plt.draw()
 
@@ -76,22 +73,22 @@ def plot(sequence, n=float('inf'), n_bins=100):
     else:
         sequence = iter(sequence)
 
-    snapshots_queue = multiprocessing.Queue()
+    receiver_pipe, sender_pipe = multiprocessing.Pipe(duplex=False)
 
-    plot_process = multiprocessing.Process(target=_run_plot, args=(snapshots_queue,))
+    plot_process = multiprocessing.Process(target=_run_plot, args=(receiver_pipe,))
     plot_process.start()
 
 
     digest = Digest(n_bins=n_bins, seed_value=next(sequence))
     i = 0
-    while i < n-1:
+    while i < n-1 and plot_process.is_alive():
         i += 1
         digest.update(next(sequence))
-        if snapshots_queue.empty():
-            snapshots_queue.put(digest.get_snapshot())
+        if not receiver_pipe.poll():
+            sender_pipe.send(digest.get_snapshot())
 
     last_snapshot = digest.get_snapshot()
-    snapshots_queue.put(last_snapshot)
+    sender_pipe.send(last_snapshot)
     return last_snapshot
 
 from random import randint
