@@ -2,6 +2,7 @@ import multiprocessing
 from matplotlib import pyplot as plt
 import matplotlib.ticker as mtick
 from collections import namedtuple
+import itertools
 import queue
 
 Snapshot = namedtuple('Snapshot', 'n min max mean bins_width pdf')
@@ -68,18 +69,24 @@ def _run_plot(snapshots_queue):
         except:
             break
 
-def plot(fn, n=1e6, n_bins=100):
+def plot(sequence, n=float('inf'), n_bins=100):
+    if callable(sequence):
+        fn = sequence
+        sequence = (fn() for _ in itertools.count())
+    else:
+        sequence = iter(sequence)
+
     snapshots_queue = multiprocessing.Queue()
 
     plot_process = multiprocessing.Process(target=_run_plot, args=(snapshots_queue,))
     plot_process.start()
 
 
-    digest = Digest(n_bins=n_bins, seed_value=fn())
+    digest = Digest(n_bins=n_bins, seed_value=next(sequence))
     i = 0
     while i < n-1:
         i += 1
-        digest.update(fn())
+        digest.update(next(sequence))
         if snapshots_queue.empty():
             snapshots_queue.put(digest.get_snapshot())
 
@@ -87,22 +94,21 @@ def plot(fn, n=1e6, n_bins=100):
     snapshots_queue.put(last_snapshot)
     return last_snapshot
 
-import random
+from random import randint
 def d(n):
-    return random.randint(1, n)
+    return randint(1, n)
 
 if __name__ == '__main__':
-    import random, time
-    def flip_or_bust():
-        money = 1
-        while True:
-            if random.random() > 0.5:
-                money *= 2
-            else:
-                return money
-    results = []
-    for i in range(1000):
-        results.append(max(0.5, random.random()))
-    #plot_sample(lambda: time.sleep(0.00001) or flip_or_bust(), n=10000)
-    plot(lambda: max(0.5, random.random()), n=100000000)
-    #plot_sample(lambda: time.sleep(0.01) or random.choice([1, 2]), n=1000)
+    import sys
+    import re
+    from random import *
+
+    if len(sys.argv) > 1:
+        sequence = lambda: eval(' '.join(sys.argv[1:]))
+    else:
+        def stdin_numbers():
+            for line in sys.stdin:
+                yield from re.findall(r'\d+\.?\d*', line)
+        sequence = stdin_numbers()
+
+    print(plot(sequence))
