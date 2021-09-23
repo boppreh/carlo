@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 import matplotlib.ticker as mtick
 from collections import namedtuple
 import itertools
+import math
 
 Snapshot = namedtuple('Snapshot', 'n min max mean bins_width bins')
 
@@ -18,13 +19,9 @@ class Digest:
         self.n_bins = n_bins
         self.bins = [1]
         self.is_int = isinstance(seed_value, int)
-
-    @property
-    def bins_width(self):
-        width = (self.bins_end - self.bins_start) / self.n_bins
-        return max(1, int(width)) if self.is_int else width
+        self.bins_width = 0
     
-    def update(self, value):
+    def update(self, value, count=1):
         self.n += 1
         self.min_found = min(self.min_found, value)
         self.max_found = max(self.max_found, value)
@@ -33,31 +30,47 @@ class Digest:
         if len(self.bins) == 1:
             if value == self.bins_start:
                 self.bins[0] += 1
-                return
+            else:
+                old_value = self.bins_start
+                old_count = self.bins[0]
+                full_width = abs(self.bins_start - value)
+                self.bins_width = full_width / self.n_bins
+                midway = self.bins_start + (full_width) / 2
+                if self.is_int:
+                    midway = round(midway)
+                    self.bins_width = max(1, math.ceil(self.bins_width))
+                self.bins_start = midway - self.n_bins//2 * self.bins_width
+                self.bins_end = midway + self.n_bins//2 * self.bins_width
+                self.bins = [0] * self.n_bins
+                self.update(old_value, old_count)
 
-            distance = value - self.bins_start
-            midway = self.bins_start + distance/2
-            width = abs(distance) / self.n_bins
-            if self.is_int:
-                midway = int(midway)
-                width = max(1, int(width))
-            #print(f'Initializing bins {self.bins_start=}, {value=}, {distance=} {midway=} {width=}')
-            self.bins_start = midway - self.n_bins // 2 * width
-            self.bins_end = midway + self.n_bins // 2 * width
-            self.bins = (self.n_bins - 1) * [0] + [self.bins[0]] + (self.n_bins - 1) * [0]
-            #print('Initialized bins', self.bins_start, value, self.bins_end, self.bins_width)
+        while True:
+            value_bin_i = round((value - self.bins_start) / self.bins_width)
+            if 0 <= value_bin_i < self.n_bins:
+                try:
+                    self.bins[value_bin_i] += count
+                except IndexError:
+                    breakpoint()
+                break
 
-        while value >= self.bins_end:
-            #print('Increasing end', self.bins_start, value, self.bins_end, self.bins_width)
-            self.bins_end = self.bins_start + 2 * self.n_bins * self.bins_width
-            self.bins = [self.bins[i] + self.bins[i+1] for i in range(0, self.n_bins, 2)] + self.n_bins//2 * [0]
-        while value < self.bins_start:
-            #print('Reducing start', self.bins_start, value, self.bins_end, self.bins_width)
-            self.bins_start = self.bins_end - 2 * self.n_bins * self.bins_width
-            self.bins = self.n_bins//2 * [0] + [self.bins[i] + self.bins[i+1] for i in range(0, self.n_bins, 2)]
-        bin_i = int((value - self.bins_start) / self.bins_width)
-        assert 0 <= bin_i < self.n_bins, (self.bins_start, value, self.bins_end, self.bins_width)
-        self.bins[bin_i] += 1
+            non_empty_bin_indexes = [i for i, count in enumerate(self.bins) if count]
+            min_bin_i = non_empty_bin_indexes[0]
+            max_bin_i = non_empty_bin_indexes[-1]
+            n_non_empty_bins = self.n_bins - (1 + max_bin_i - min_bin_i)
+            if value_bin_i > max_bin_i and value_bin_i - max_bin_i <= n_non_empty_bins:
+                # We can remove empty bins from the left to fit the value.
+                self.bins = self.bins[n_non_empty_bins:] + [0] * n_non_empty_bins
+                self.bins_start += n_non_empty_bins * self.bins_width
+                self.bins_end += n_non_empty_bins * self.bins_width
+            elif value_bin_i < min_bin_i and min_bin_i - value_bin_i <= n_non_empty_bins:
+                # We can remove empty bins from the right to fit the value.
+                self.bins = [0] * n_non_empty_bins + self.bins[:-n_non_empty_bins]
+                self.bins_start -= n_non_empty_bins * self.bins_width
+                self.bins_end -= n_non_empty_bins * self.bins_width
+            else:
+                # Value is too far away, shrink all bins by 2 and try again.
+                self.bins = [self.bins[i] + self.bins[i+1] for i in range(0, self.n_bins, 2)] + self.n_bins//2 * [0]
+                self.bins_width *= 2
 
     def get_snapshot(self):
         return Snapshot(self.n, self.min_found, self.max_found, self.mean, self.bins_width, {self.bins_start + self.bins_width * i: bin_value for i, bin_value in enumerate(self.bins) if bin_value})
