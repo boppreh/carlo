@@ -181,8 +181,11 @@ def _run_plot(receiver_pipe):
         # The receiver pipe will contain at most one snapshot, and by receiving
         # it we signal to the sender that they should prepare a new one. If a
         # snapshot is not available, render the previous one again.
-        if receiver_pipe.poll():
-            snapshots = receiver_pipe.recv()
+        try:
+            if receiver_pipe.poll():
+                snapshots = receiver_pipe.recv()
+        except BrokenPipeError:
+            pass
         draw(snapshots)
         try:
             fig.canvas.flush_events()
@@ -270,6 +273,6 @@ if __name__ == '__main__':
         # TODO: fix broken example
         # Usage:
         #     $ echo "1 2 3" | python -m carlo
-        sequences_or_fns = [number for line in sys.stdin for number in map(float, re.findall(r'\d+\.?\d*', line))]
+        sequences_or_fns = [(number for line in sys.stdin for number in map(float, re.findall(r'\d+\.?\d*', line)))]
 
     print(plot(*sequences_or_fns))
