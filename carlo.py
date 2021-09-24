@@ -39,7 +39,7 @@ class Digest:
         self.min = self.max = seed_value
         self.mean = seed_value
         self.msq = 0
-        self.n = 1
+        self.n_samples = 1
         self.bins_start = seed_value
         self.bins_end = seed_value
         self.n_bins = n_bins
@@ -56,16 +56,16 @@ class Digest:
         """
         Updates this instances statistics to include the new value.
         """
-        # Count (`n`), maximum and minimum values, and mean are computed
+        # Count (`n_samples`), maximum and minimum values, and mean are computed
         # separately from the histogram to increase precision.
+        self.n_samples += 1
         self.min = min(self.min, value)
         self.max = max(self.max, value)
 
         # Online mean and variance algorithm, adapted from Welford (1962), described here:
         # https://stats.stackexchange.com/questions/235129/online-estimation-of-variance-with-limited-memory
-        self.n += 1
         delta = value - self.mean
-        self.mean += delta / self.n
+        self.mean += delta / self.n_samples
         # Note that this can't be replaced by delta ** 2 because the `mean`
         # was updated after delta was calculated.
         self.msq += delta * (value - self.mean)
@@ -138,11 +138,11 @@ class Digest:
         Returns an immutable snapshot of the statistics so far.
         """
         bins_dict = {self.bins_start + self.bins_width * i: bin_value for i, bin_value in enumerate(self.bins) if bin_value}
-        variance = float('nan') if self.n == 1 else self.msq / (self.n - 1)
-        return Snapshot(self.n, self.min, self.max, self.mean, variance, self.bins_width, bins_dict, self.is_int, self.label)
+        variance = float('nan') if self.n_samples == 1 else self.msq / (self.n_samples - 1)
+        return Snapshot(self.n_samples, self.min, self.max, self.mean, variance, self.bins_width, bins_dict, self.is_int, self.label)
 
 # A snapshot of the running digest, necessary to maintain thread-/process- safety.
-Snapshot = namedtuple('Snapshot', 'n min max mean variance bins_width bins is_int label')
+Snapshot = namedtuple('Snapshot', 'n_samples min max mean variance bins_width bins is_int label')
 
 def _run_plot(receiver_pipe):
     """
@@ -170,11 +170,11 @@ def _run_plot(receiver_pipe):
                 mean_error_str = ''
             else:
                 stdev = math.sqrt(snapshot.variance)
-                mean_error = stdev / math.sqrt(snapshot.n)
+                mean_error = stdev / math.sqrt(snapshot.n_samples)
                 mean_error_str = f'±{format_number2(mean_error)}'
             legend = f'{snapshot.label} - Range: [{format_number(snapshot.min)}, {format_number(snapshot.max)}] - Mean: {format_number(snapshot.mean)}{mean_error_str}'
-            plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width, label=legend)
-        plt.title(f'Results of {snapshots[0].n} samples')
+            plt.bar(snapshot.bins.keys(), [value / snapshot.n_samples for value in snapshot.bins.values()], width=snapshot.bins_width, label=legend)
+        plt.title(f'Results of {snapshots[0].n_samples} samples')
         plt.legend()
         plt.draw()
 
@@ -200,7 +200,7 @@ def _run_plot(receiver_pipe):
             # that's too unrelated from this code to import. Just catch everything.
             break
 
-def plot(*sequences_or_fns, n=float('inf'), n_bins=100, is_int=None, labels=None):
+def plot(*sequences_or_fns, n_samples=float('inf'), n_bins=100, is_int=None, labels=None):
     """
     Plots a sequence of values, or the results of repeatedly calling the given
     function. The statistics of the values is continually updated and shown in
@@ -209,7 +209,7 @@ def plot(*sequences_or_fns, n=float('inf'), n_bins=100, is_int=None, labels=None
     - `sequence_or_fn`: if a list, tuple, or generator of numbers is given,
     compute streaming statistics on all values. If a function is given,
     repeatedly call it with no arguments and plot the returned numbers.
-    - `n`: plot at most this many values. Defaults to infinite.
+    - `n_samples`: plot at most this many values. Defaults to infinite.
     - `n_bins`: maximum number of bins to spit the values into. To deal with the
     streaming values, the actual number of bins will be between n_bins/2 and n_bins.
     - `is_int`: is True, forces the start and end values of bins to be
@@ -241,12 +241,13 @@ def plot(*sequences_or_fns, n=float('inf'), n_bins=100, is_int=None, labels=None
     digests = []
     for label, iterator in zip_longest(labels, iterators):
         digests.append(Digest(n_bins=n_bins, seed_value=next(iterator), is_int=is_int, label=label))
-    # Manual counting with a while loop to accommodate `n=float('inf')`.
+        
+    # Manual counting with a while loop to accommodate `n_samples=float('inf')`.
     i = 0
     # The plot_process will die when the user closes the window, and we should
     # stop the computation too.
     try:
-        while i < n-1 and plot_process.is_alive():
+        while i < n_samples-1 and plot_process.is_alive():
             i += 1
             for iterator, digest in zip(iterators, digests):
                 digest.update(next(iterator))
