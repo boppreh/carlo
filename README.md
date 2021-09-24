@@ -1,8 +1,8 @@
 # carlo
 
-Interactively plot streaming sequences of numbers.
+Named after the Monte Carlo algorithm, this module displays interactive histograms of streaming/online data. It's meant for quickly visualizing distributions, and it'll keep refining its histogram as new data comes in.
 
-Accepts lists, generators, numbers from stdin, or a function to be repeatdly evaluated. Displays data as histograms, with bin size and location automatically adjusted, and extra statistics in legends.
+Accepts lists, generators, numbers from stdin, or a function to be repeatdly evaluated. Displays data as histograms with automagic bin allocation, and extra statistics in legends.
 
 ## Example 1
 
