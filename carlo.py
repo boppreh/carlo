@@ -1,6 +1,7 @@
 import math
 import multiprocessing
 import matplotlib.ticker as mtick
+from itertools import zip_longest
 from matplotlib import pyplot as plt
 from collections import namedtuple
 
@@ -19,7 +20,7 @@ class Digest:
     operations are sufficient to always cover incoming values, at the cost
     of having up to 50% of bins empty.
     """
-    def __init__(self, n_bins, seed_value, is_int=None):
+    def __init__(self, n_bins, seed_value, is_int=None, label=None):
         """
         Initializes the running digest.
         - `n_bins`: the number of bins to divide the histogram in. Note that
@@ -30,6 +31,7 @@ class Digest:
         - `is_int`: is True, forces the start and end values of bins to be
         integers. If None, automatically decides this based on the seed value.
         """
+        self.label = label
         if n_bins % 2 == 1:
             raise ValueError(f'Number of bins must be even, got {n_bins}.')
         self.results = []
@@ -136,10 +138,10 @@ class Digest:
         """
         bins_dict = {self.bins_start + self.bins_width * i: bin_value for i, bin_value in enumerate(self.bins) if bin_value}
         variance = float('nan') if self.n == 1 else self.msq / (self.n - 1)
-        return Snapshot(self.n, self.min, self.max, self.mean, variance, self.bins_width, bins_dict, self.is_int)
+        return Snapshot(self.n, self.min, self.max, self.mean, variance, self.bins_width, bins_dict, self.is_int, self.label)
 
 # A snapshot of the running digest, necessary to maintain thread-/process- safety.
-Snapshot = namedtuple('Snapshot', 'n min max mean variance bins_width bins is_int')
+Snapshot = namedtuple('Snapshot', 'n min max mean variance bins_width bins is_int label')
 
 def _run_plot(receiver_pipe):
     """
@@ -148,6 +150,7 @@ def _run_plot(receiver_pipe):
     """
     # Black magic helper function to format a number to 4 significant places.
     format_number = lambda n: f'{float(f"{n:.4g}"):g}'
+    format_number2 = lambda n: f'{float(f"{n:.2g}"):g}'
 
     def draw(snapshots):
         """  Updates the rendering with the given snapshot. """
@@ -166,9 +169,10 @@ def _run_plot(receiver_pipe):
             else:
                 stdev = math.sqrt(snapshot.variance)
                 mean_error = stdev / math.sqrt(snapshot.n)
-                mean_error_str = f'±{format_number(mean_error)}'
-            label = f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)}{mean_error_str} - Mode: {format_number(mode)}{mode_error} - Max: {format_number(snapshot.max)}'
-            plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width, label=label)
+                mean_error_str = f'±{format_number2(mean_error)}'
+            legend = f'{snapshot.label} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)}{mean_error_str} - Mode: {format_number(mode)}{mode_error} - Max: {format_number(snapshot.max)}'
+            plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width, label=legend)
+        plt.title(f'Results of {snapshots[0].n} samples')
         plt.legend()
         plt.draw()
 
@@ -194,7 +198,7 @@ def _run_plot(receiver_pipe):
             # that's too unrelated from this code to import. Just catch everything.
             break
 
-def plot(*sequences_or_fns, n=float('inf'), n_bins=100, is_int=None):
+def plot(*sequences_or_fns, n=float('inf'), n_bins=100, is_int=None, labels=None):
     """
     Plots a sequence of values, or the results of repeatedly calling the given
     function. The statistics of the values is continually updated and shown in
@@ -230,7 +234,9 @@ def plot(*sequences_or_fns, n=float('inf'), n_bins=100, is_int=None):
     plot_process = multiprocessing.Process(target=_run_plot, args=(receiver_pipe,))
     plot_process.start()
 
-    digests = [Digest(n_bins=n_bins, seed_value=next(iterator), is_int=None) for iterator in iterators]
+    digests = []
+    for label, iterator in zip_longest(labels, iterators):
+        digests.append(Digest(n_bins=n_bins, seed_value=next(iterator), is_int=is_int, label=label))
     # Manual counting with a while loop to accommodate `n=float('inf')`.
     i = 0
     # The plot_process will die when the user closes the window, and we should
@@ -269,10 +275,12 @@ if __name__ == '__main__':
         # Usage:
         #     $ python -m carlo 'd(6)+d(12)'
         sequences_or_fns = [(lambda arg=arg: eval(arg)) for arg in sys.argv[1:]]
+        labels = sys.argv[1:]
     else:
         # TODO: fix broken example
         # Usage:
         #     $ echo "1 2 3" | python -m carlo
         sequences_or_fns = [(number for line in sys.stdin for number in map(float, re.findall(r'\d+\.?\d*', line)))]
+        labels = None
 
-    print(plot(*sequences_or_fns))
+    print(plot(*sequences_or_fns, labels=labels))
