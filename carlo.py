@@ -162,15 +162,16 @@ def _run_plot(receiver_pipe):
         # We have computed the bins and bar heights already, so use `.bar()`
         # instead of `.hist()`.
         for snapshot in snapshots:
-            mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
-            mode_error = '' if snapshot.is_int and snapshot.bins_width <= 1 else f'±{format_number(snapshot.bins_width/2)}'
+            # Mode is not very useful right now.
+            #mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
+            #mode_error = '' if snapshot.is_int and snapshot.bins_width <= 1 else f'±{format_number(snapshot.bins_width/2)}'
             if math.isnan(snapshot.variance):
                 mean_error_str = ''
             else:
                 stdev = math.sqrt(snapshot.variance)
                 mean_error = stdev / math.sqrt(snapshot.n)
                 mean_error_str = f'±{format_number2(mean_error)}'
-            legend = f'{snapshot.label} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)}{mean_error_str} - Mode: {format_number(mode)}{mode_error} - Max: {format_number(snapshot.max)}'
+            legend = f'{snapshot.label} - Range: [{format_number(snapshot.min)}, {format_number(snapshot.max)}] - Mean: {format_number(snapshot.mean)}{mean_error_str}'
             plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width, label=legend)
         plt.title(f'Results of {snapshots[0].n} samples')
         plt.legend()
