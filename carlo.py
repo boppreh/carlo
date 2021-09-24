@@ -127,10 +127,10 @@ class Digest:
         Returns an immutable snapshot of the statistics so far.
         """
         bins_dict = {self.bins_start + self.bins_width * i: bin_value for i, bin_value in enumerate(self.bins) if bin_value}
-        return Snapshot(self.n, self.min, self.max, self.mean, self.bins_width, bins_dict)
+        return Snapshot(self.n, self.min, self.max, self.mean, self.bins_width, bins_dict, self.is_int)
 
 # A snapshot of the running digest, necessary to maintain thread-/process- safety.
-Snapshot = namedtuple('Snapshot', 'n min max mean bins_width bins')
+Snapshot = namedtuple('Snapshot', 'n min max mean bins_width bins is_int')
 
 def _run_plot(receiver_pipe):
     """
@@ -151,7 +151,8 @@ def _run_plot(receiver_pipe):
         # Formats Y axis with 0% to 100% instead of 0 to 1.
         plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
         mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
-        plt.title(f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {format_number(mode)}±{format_number(snapshot.bins_width/2)} - Max: {format_number(snapshot.max)}')
+        mode_str = format_number(mode) + ('' if snapshot.is_int and snapshot.bins_width <= 1 else f'±{format_number(snapshot.bins_width/2)}')
+        plt.title(f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {mode_str} - Max: {format_number(snapshot.max)}')
         plt.draw()
 
     fig = plt.figure()
