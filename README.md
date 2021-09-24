@@ -6,9 +6,9 @@ Accepts lists, generators, numbers from stdin, or a function to be repeatdly eva
 
 ## Example 1
 
-Sample values from a one 20-sided dice vs three 6-sided dices and have histograms of the distributions.
+Compare samples from one 20-sided dice vs three 6-sided dices.
 
-As standalone module (note that `d(n)` is available, and all functions from the `random` module):
+As standalone module (where `d(n)` simulates the roll of a `n`-sided dice):
 
     $ python -m carlo 'd(20)' 'd(6)+d(6)+d(6)'
 
@@ -21,7 +21,9 @@ Or imported:
 
 ## Example 2
 
-Sample values from `max(0.5, random()**0.2)`
+Sample values from `max(0.5, random()**0.2)`.
+
+As standalone module (all functions from the `random` module are automatically available).
 
     $ python -m carlo 'max(0.5, random()**0.2)'
 
