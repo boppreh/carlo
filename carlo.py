@@ -42,7 +42,7 @@ class Digest:
         # following values will be integers too, and force the bin attributes to
         # be integers too.
         self.is_int = is_int if is_int is not None else isinstance(seed_value, int)
-        self.bins_width = 0
+        self.bins_width = 1
         # The `bins` attribute is an array for efficiency reasons, but converted
         # to a more useful dict {bin_middle_point: count} when taking a snapshot.
         self.bins = [1]
@@ -59,7 +59,7 @@ class Digest:
         # TODO: improve numeric stability.
         self.mean = value if self.mean is None else (self.mean * self.n + value) / (self.n + 1)
 
-        if self.bins_width == 0:
+        if len(self.bins) == 1:
             # We have only seen one unique value so far, and cannot compute bins yet.
 
             if value == self.bins_start:
