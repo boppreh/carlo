@@ -52,7 +52,7 @@ class Digest:
         # to a more useful dict {bin_middle_point: count} when taking a snapshot.
         self.bins = [1]
     
-    def update(self, value, count=1):
+    def update(self, value):
         """
         Updates this instances statistics to include the new value.
         """
@@ -101,7 +101,7 @@ class Digest:
             value_bin_i = round((value - self.bins_start) / self.bins_width)
             if 0 <= value_bin_i < self.n_bins:
                 # Bin index is valid, increment and stop.
-                self.bins[value_bin_i] += count
+                self.bins[value_bin_i] += 1
                 break
 
             # The new value does not fit into our current bin division. We have
@@ -241,7 +241,7 @@ def plot(*sequences_or_fns, n_samples=float('inf'), n_bins=100, is_int=None, lab
     digests = []
     for label, iterator in zip_longest(labels, iterators):
         digests.append(Digest(n_bins=n_bins, seed_value=next(iterator), is_int=is_int, label=label))
-        
+
     # Manual counting with a while loop to accommodate `n_samples=float('inf')`.
     i = 0
     # The plot_process will die when the user closes the window, and we should
