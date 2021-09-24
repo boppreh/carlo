@@ -2,7 +2,6 @@ import multiprocessing
 from matplotlib import pyplot as plt
 import matplotlib.ticker as mtick
 from collections import namedtuple
-import itertools
 import math
 
 class Digest:
@@ -140,33 +139,35 @@ def _run_plot(receiver_pipe):
     # Black magic helper function to format a number to 4 significant places.
     format_number = lambda n: f'{float(f"{n:.4g}"):g}'
 
-    def draw(snapshot):
+    def draw(snapshots):
         """  Updates the rendering with the given snapshot. """
         plt.clf()
-        # We have computed the bins and bar heights already, so use `.bar()`
-        # instead of `.hist()`.
-        plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width)
         plt.xlabel('Result')
         plt.ylabel('Probability')
-        # Formats Y axis with 0% to 100% instead of 0 to 1.
         plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
-        mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
-        mode_str = format_number(mode) + ('' if snapshot.is_int and snapshot.bins_width <= 1 else f'±{format_number(snapshot.bins_width/2)}')
-        plt.title(f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {mode_str} - Max: {format_number(snapshot.max)}')
+        # We have computed the bins and bar heights already, so use `.bar()`
+        # instead of `.hist()`.
+        print(snapshots)
+        for snapshot in snapshots:
+            plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width)
+            # Formats Y axis with 0% to 100% instead of 0 to 1.
+            #mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
+            #mode_str = format_number(mode) + ('' if snapshot.is_int and snapshot.bins_width <= 1 else f'±{format_number(snapshot.bins_width/2)}')
+            #plt.title(f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {mode_str} - Max: {format_number(snapshot.max)}')
         plt.draw()
 
     fig = plt.figure()
     # Blocks until the first snapshot is provided to avoid showing incorrect data.
-    snapshot = receiver_pipe.recv()
-    draw(snapshot)
+    snapshots = receiver_pipe.recv()
+    draw(snapshots)
     plt.show(block=False)
     while True:
         # The receiver pipe will contain at most one snapshot, and by receiving
         # it we signal to the sender that they should prepare a new one. If a
         # snapshot is not available, render the previous one again.
         if receiver_pipe.poll():
-            snapshot = receiver_pipe.recv()
-        draw(snapshot)
+            snapshots = receiver_pipe.recv()
+        draw(snapshots)
         try:
             fig.canvas.flush_events()
         except:
@@ -174,7 +175,7 @@ def _run_plot(receiver_pipe):
             # that's too unrelated from this code to import. Just catch everything.
             break
 
-def plot(sequence_or_fn, n=float('inf'), n_bins=100, is_int=None):
+def plot(*sequences_or_fns, n=float('inf'), n_bins=100, is_int=None):
     """
     Plots a sequence of values, or the results of repeatedly calling the given
     function. The statistics of the values is continually updated and shown in
@@ -189,10 +190,18 @@ def plot(sequence_or_fn, n=float('inf'), n_bins=100, is_int=None):
     - `is_int`: is True, forces the start and end values of bins to be
     integers. If None, automatically decides this based on the seed value.
     """
-    if callable(sequence_or_fn):
-        sequence = (sequence_or_fn() for _ in itertools.count())
-    else:
-        sequence = iter(sequence_or_fn)
+    iterators = []
+    for sequence_or_fn in sequences_or_fns:
+        if callable(sequence_or_fn):
+            def loop(fn=sequence_or_fn):
+                # Could be replaced with a generator and itertools.count, but I
+                # had some inexplicable aliasing problems that resulted in the
+                # the same function being used in every iterator.
+                while True:
+                    yield fn()
+            iterators.append(loop())
+        else:
+            iterators.append(iter(sequence_or_fn))
 
     receiver_pipe, sender_pipe = multiprocessing.Pipe(duplex=False)
 
@@ -202,7 +211,7 @@ def plot(sequence_or_fn, n=float('inf'), n_bins=100, is_int=None):
     plot_process = multiprocessing.Process(target=_run_plot, args=(receiver_pipe,))
     plot_process.start()
 
-    digest = Digest(n_bins=n_bins, seed_value=next(sequence), is_int=None)
+    digests = [Digest(n_bins=n_bins, seed_value=next(iterator), is_int=None) for iterator in iterators]
     # Manual counting with a while loop to accommodate `n=float('inf')`.
     i = 0
     # The plot_process will die when the user closes the window, and we should
@@ -210,16 +219,18 @@ def plot(sequence_or_fn, n=float('inf'), n_bins=100, is_int=None):
     try:
         while i < n-1 and plot_process.is_alive():
             i += 1
-            digest.update(next(sequence))
-            # The plotting window has just consumed a snapshot, give it another one.
+            for iterator, digest in zip(iterators, digests):
+                digest.update(next(iterator))
+
             if not receiver_pipe.poll():
-                sender_pipe.send(digest.get_snapshot())
+                # The plotting window has just consumed a snapshot, give it another one.
+                sender_pipe.send([digest.get_snapshot() for digest in digests])
     except StopIteration:
+        # An iterator has finished.
         pass
 
     # Ensure that the final state of the sequence is shown.
-    last_snapshot = digest.get_snapshot()
-    sender_pipe.send(last_snapshot)
+    sender_pipe.send([digest.get_snapshot() for digest in digests])
 
     # Probably nobody will use this, but it's easy to return the last snapshot.
     return last_snapshot
@@ -237,14 +248,11 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         # Usage:
         #     $ python -m carlo 'd(6)+d(12)'
-        sequence = lambda: eval(' '.join(sys.argv[1:]))
+        sequences_or_fns = [(lambda arg=arg: eval(arg)) for arg in sys.argv[1:]]
     else:
         # TODO: fix broken example
         # Usage:
         #     $ echo "1 2 3" | python -m carlo
-        def stdin_numbers():
-            for line in sys.stdin:
-                yield from map(float, re.findall(r'\d+\.?\d*', line))
-        sequence = stdin_numbers()
+        sequences_or_fns = [number for line in sys.stdin for number in map(float, re.findall(r'\d+\.?\d*', line))]
 
-    print(plot(sequence))
+    print(plot(*sequences_or_fns))
