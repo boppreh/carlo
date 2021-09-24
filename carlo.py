@@ -1,8 +1,10 @@
-import multiprocessing
-from matplotlib import pyplot as plt
-import matplotlib.ticker as mtick
-from collections import namedtuple
 import math
+import multiprocessing
+import matplotlib.ticker as mtick
+from matplotlib import pyplot as plt
+from collections import namedtuple
+
+CONFIDENCE = 0.95
 
 class Digest:
     """
@@ -32,7 +34,8 @@ class Digest:
             raise ValueError(f'Number of bins must be even, got {n_bins}.')
         self.results = []
         self.min = self.max = seed_value
-        self.mean = None
+        self.mean = seed_value
+        self.msq = 0
         self.n = 1
         self.bins_start = seed_value
         self.bins_end = seed_value
@@ -52,11 +55,17 @@ class Digest:
         """
         # Count (`n`), maximum and minimum values, and mean are computed
         # separately from the histogram to increase precision.
-        self.n += 1
         self.min = min(self.min, value)
         self.max = max(self.max, value)
-        # TODO: improve numeric stability.
-        self.mean = value if self.mean is None else (self.mean * self.n + value) / (self.n + 1)
+
+        # Online mean and variance algorithm, adapted from Welford (1962), described here:
+        # https://stats.stackexchange.com/questions/235129/online-estimation-of-variance-with-limited-memory
+        self.n += 1
+        delta = value - self.mean
+        self.mean += delta / self.n
+        # Note that this can't be replaced by delta ** 2 because the `mean`
+        # was updated after delta was calculated.
+        self.msq += delta * (value - self.mean)
 
         if len(self.bins) == 1:
             # We have only seen one unique value so far, and cannot compute bins yet.
@@ -126,10 +135,11 @@ class Digest:
         Returns an immutable snapshot of the statistics so far.
         """
         bins_dict = {self.bins_start + self.bins_width * i: bin_value for i, bin_value in enumerate(self.bins) if bin_value}
-        return Snapshot(self.n, self.min, self.max, self.mean, self.bins_width, bins_dict, self.is_int)
+        variance = float('nan') if self.n == 1 else self.msq / (self.n - 1)
+        return Snapshot(self.n, self.min, self.max, self.mean, variance, self.bins_width, bins_dict, self.is_int)
 
 # A snapshot of the running digest, necessary to maintain thread-/process- safety.
-Snapshot = namedtuple('Snapshot', 'n min max mean bins_width bins is_int')
+Snapshot = namedtuple('Snapshot', 'n min max mean variance bins_width bins is_int')
 
 def _run_plot(receiver_pipe):
     """
@@ -148,11 +158,16 @@ def _run_plot(receiver_pipe):
         plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
         # We have computed the bins and bar heights already, so use `.bar()`
         # instead of `.hist()`.
-        print(snapshots)
         for snapshot in snapshots:
             mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
-            mode_str = format_number(mode) + ('' if snapshot.is_int and snapshot.bins_width <= 1 else f'±{format_number(snapshot.bins_width/2)}')
-            label = f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {mode_str} - Max: {format_number(snapshot.max)}'
+            mode_error = '' if snapshot.is_int and snapshot.bins_width <= 1 else f'±{format_number(snapshot.bins_width/2)}'
+            if math.isnan(snapshot.variance):
+                mean_error_str = ''
+            else:
+                stdev = math.sqrt(snapshot.variance)
+                mean_error = stdev / math.sqrt(snapshot.n)
+                mean_error_str = f'±{format_number(mean_error)}'
+            label = f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)}{mean_error_str} - Mode: {format_number(mode)}{mode_error} - Max: {format_number(snapshot.max)}'
             plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width, label=label)
         plt.legend()
         plt.draw()
