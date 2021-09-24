@@ -275,7 +275,8 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         # Usage:
         #     $ python -m carlo 'd(6)+d(12)'
-        sequences_or_fns = [(lambda arg=arg: eval(arg)) for arg in sys.argv[1:]]
+        compiled_fns = [compile(arg, f'<argv_function_{i}>', 'eval') for i, arg in enumerate(sys.argv[1:])]
+        sequences_or_fns = [lambda compiled_fn=compiled_fn: eval(compiled_fn) for compiled_fn in compiled_fns]
         labels = sys.argv[1:]
     else:
         # TODO: fix broken example
