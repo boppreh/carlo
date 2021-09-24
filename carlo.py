@@ -144,16 +144,17 @@ def _run_plot(receiver_pipe):
         plt.clf()
         plt.xlabel('Result')
         plt.ylabel('Probability')
+        # Formats Y axis with 0% to 100% instead of 0 to 1.
         plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
         # We have computed the bins and bar heights already, so use `.bar()`
         # instead of `.hist()`.
         print(snapshots)
         for snapshot in snapshots:
-            plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width)
-            # Formats Y axis with 0% to 100% instead of 0 to 1.
-            #mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
-            #mode_str = format_number(mode) + ('' if snapshot.is_int and snapshot.bins_width <= 1 else f'±{format_number(snapshot.bins_width/2)}')
-            #plt.title(f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {mode_str} - Max: {format_number(snapshot.max)}')
+            mode = max(snapshot.bins.keys(), key=snapshot.bins.__getitem__)
+            mode_str = format_number(mode) + ('' if snapshot.is_int and snapshot.bins_width <= 1 else f'±{format_number(snapshot.bins_width/2)}')
+            label = f'Samples: {format_number(snapshot.n)} - Min: {format_number(snapshot.min)} - Mean: {format_number(snapshot.mean)} - Mode: {mode_str} - Max: {format_number(snapshot.max)}'
+            plt.bar(snapshot.bins.keys(), [value / snapshot.n for value in snapshot.bins.values()], width=snapshot.bins_width, label=label)
+        plt.legend()
         plt.draw()
 
     fig = plt.figure()
@@ -230,10 +231,11 @@ def plot(*sequences_or_fns, n=float('inf'), n_bins=100, is_int=None):
         pass
 
     # Ensure that the final state of the sequence is shown.
-    sender_pipe.send([digest.get_snapshot() for digest in digests])
+    last_snapshots = [digest.get_snapshot() for digest in digests]
+    sender_pipe.send(last_snapshots)
 
     # Probably nobody will use this, but it's easy to return the last snapshot.
-    return last_snapshot
+    return last_snapshots[0] if len(last_snapshots) == 1 else last_snapshots
 
 from random import randint
 def d(n):
