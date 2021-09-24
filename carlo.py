@@ -283,7 +283,6 @@ if __name__ == '__main__':
         sequences_or_fns = [lambda compiled_fn=compiled_fn: eval(compiled_fn) for compiled_fn in compiled_fns]
         labels = sys.argv[1:]
     else:
-        # TODO: fix broken example
         # Usage:
         #     $ echo "1 2 3" | python -m carlo
         sequences_or_fns = [(number for line in sys.stdin for number in map(float, re.findall(r'\d+\.?\d*', line)))]
