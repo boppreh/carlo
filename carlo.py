@@ -30,6 +30,7 @@ class Digest:
         for initial alignment of bins and min/max value seen.
         - `is_int`: is True, forces the start and end values of bins to be
         integers. If None, automatically decides this based on the seed value.
+        - `label`: a string label for this digest, to be shown when plotting.
         """
         self.label = label
         if n_bins % 2 == 1:
@@ -213,6 +214,8 @@ def plot(*sequences_or_fns, n=float('inf'), n_bins=100, is_int=None, labels=None
     streaming values, the actual number of bins will be between n_bins/2 and n_bins.
     - `is_int`: is True, forces the start and end values of bins to be
     integers. If None, automatically decides this based on the seed value.
+    - `labels`: if given, a list of strings to identify each of the sequences
+    or fns provided. This will be included in their respective legends.
     """
     iterators = []
     for sequence_or_fn in sequences_or_fns:
