@@ -175,6 +175,7 @@ def _run_plot(receiver_pipe):
         plt.title(f'Results of {snapshots[0].n_samples} samples')
         plt.legend()
         plt.draw()
+        plt.tight_layout()
 
     fig = plt.figure()
     # Blocks until the first snapshot is provided to avoid showing incorrect data.
