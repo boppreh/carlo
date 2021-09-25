@@ -154,10 +154,13 @@ def _run_plot(receiver_pipe):
     def draw(snapshots):
         """  Updates the rendering with the given snapshot. """
         plt.clf()
-        plt.xlabel('Result')
-        plt.ylabel('Probability')
+
+        plt.box(False)
+        plt.gca().set_axisbelow(True)
+        plt.grid(color='#DDD')
         # Formats Y axis with 0% to 100% instead of 0 to 1.
         plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(1.0))
+
         # We have computed the bins and bar heights already, so use `.bar()`
         # instead of `.hist()`.
         for snapshot in snapshots:
@@ -172,10 +175,14 @@ def _run_plot(receiver_pipe):
                 mean_error_str = f'±{format_number2(mean_error)}'
             legend = f'{snapshot.label} - Range: [{format_number(snapshot.min)}, {format_number(snapshot.max)}] - Mean: {format_number(snapshot.mean)}{mean_error_str}'
             plt.bar(snapshot.bins.keys(), [value / snapshot.n_samples for value in snapshot.bins.values()], width=snapshot.bins_width, label=legend)
+
+        plt.xlabel('Sample value')
+        plt.ylabel('Probability')
         plt.title(f'Results of {snapshots[0].n_samples} samples')
         plt.legend()
-        plt.draw()
         plt.tight_layout()
+
+        plt.draw()
 
     fig = plt.figure()
     # Blocks until the first snapshot is provided to avoid showing incorrect data.
