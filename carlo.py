@@ -151,6 +151,8 @@ def _run_plot(receiver_pipe):
     format_number = lambda n: f'{float(f"{n:.4g}"):g}'
     format_number2 = lambda n: f'{float(f"{n:.2g}"):g}'
 
+    plt.style.use('seaborn-deep')
+
     def draw(snapshots):
         """  Updates the rendering with the given snapshot. """
         plt.clf()
