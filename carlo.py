@@ -5,8 +5,6 @@ from itertools import zip_longest
 from matplotlib import pyplot as plt
 from collections import namedtuple
 
-CONFIDENCE = 0.95
-
 class Digest:
     """
     Computes a running histogram and general statistics about the incoming data.
