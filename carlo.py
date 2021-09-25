@@ -267,9 +267,13 @@ def plot(*sequences_or_fns, n_samples=float('inf'), n_bins=100, is_int=None, lab
     return last_snapshots[0] if len(last_snapshots) == 1 else last_snapshots
 
 from random import randint
-def d(n):
-    """ Generates a random number by rolling a `n`-sided dice, e.g. d(6). """
-    return randint(1, n)
+def d(sides, repeat=1):
+    """
+    Generates a random number by rolling a n-sided dice, e.g. d(6).
+    `repeat` allows one to simulate the roll of multiple dices of the same size,
+    adding their values.
+    """
+    return sum(randint(1, sides) for _ in range(repeat))
 
 if __name__ == '__main__':
     import sys
