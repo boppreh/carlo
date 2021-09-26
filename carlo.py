@@ -175,7 +175,8 @@ def _run_plot(receiver_pipe):
                 stdev = math.sqrt(snapshot.variance)
                 mean_error = stdev / math.sqrt(snapshot.n_samples)
                 mean_error_str = f'±{format_number2(mean_error)}'
-            legend = f'{snapshot.label} - Range: [{format_number(snapshot.min)}, {format_number(snapshot.max)}] - Mean: {format_number(snapshot.mean)}{mean_error_str}'
+            prefix = f'{snapshot.label} - ' if snapshot.label else ''
+            legend = f'{prefix}Range: [{format_number(snapshot.min)}, {format_number(snapshot.max)}] - Mean: {format_number(snapshot.mean)}{mean_error_str}'
             plt.bar(snapshot.bins.keys(), [value / snapshot.n_samples for value in snapshot.bins.values()], width=snapshot.bins_width, label=legend)
 
         plt.xlabel('Sample value')
@@ -208,7 +209,7 @@ def _run_plot(receiver_pipe):
             # that's too unrelated from this code to import. Just catch everything.
             break
 
-def plot(*sequences_or_fns, n_samples=float('inf'), n_bins=100, is_int=None, labels=None):
+def plot(*sequences_or_fns, n_samples=float('inf'), n_bins=100, is_int=None, labels=()):
     """
     Plots a sequence of values, or the results of repeatedly calling the given
     function. The statistics of the values is continually updated and shown in
@@ -298,6 +299,6 @@ if __name__ == '__main__':
         # Usage:
         #     $ echo "1 2 3" | python -m carlo
         sequences_or_fns = [(number for line in sys.stdin for number in map(float, re.findall(r'\d+\.?\d*', line)))]
-        labels = None
+        labels = ()
 
     print(plot(*sequences_or_fns, labels=labels))
