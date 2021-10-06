@@ -18,7 +18,7 @@ plot(lambda: d(20), lambda: d(6)+d(6)+d(6))
 Or as standalone module (where `d(n)` simulates the roll of a `n`-sided dice):
 
 ```bash
-$ carlo "d(20)" "d(6)+d(6)+d(6)"
+carlo "d(20)" "d(6)+d(6)+d(6)"
 ```
 
 ![example screenshot showing two histograms superimposed](./screenshot1.png)
@@ -38,7 +38,7 @@ plot(lambda: max(0.5, random()**0.2))
 Or as standalone module (all functions from the `random` module are automatically available).
 
 ```bash
-$ carlo "max(0.5, random()**0.2)"
+carlo "max(0.5, random()**0.2)"
 ```
     
 ![example screenshot showing a skewed-looking histogram](./screenshot2.png)
