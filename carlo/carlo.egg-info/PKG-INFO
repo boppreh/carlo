@@ -1,3 +1,20 @@
+Metadata-Version: 2.1
+Name: carlo
+Version: 0.1.4
+Summary: Interactively plot streaming sequences of numbers
+Home-page: https://github.com/boppreh/carlo
+Author: BoppreH
+Author-email: github@boppreh.com
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/boppreh/carlo/issues
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
 # carlo
 
 Named after the Monte Carlo algorithm, this module displays interactive histograms of streaming/online data. It's meant for quickly visualizing distributions, and it'll keep refining its histogram as new data comes in.
@@ -18,7 +35,7 @@ plot(lambda: d(20), lambda: d(6)+d(6)+d(6))
 Or as standalone module (where `d(n)` simulates the roll of a `n`-sided dice):
 
 ```bash
-$ carlo "d(20)" "d(6)+d(6)+d(6)"
+$ python -m carlo "d(20)" "d(6)+d(6)+d(6)"
 ```
 
 ![example screenshot showing two histograms superimposed](./screenshot1.png)
@@ -38,7 +55,9 @@ plot(lambda: max(0.5, random()**0.2))
 Or as standalone module (all functions from the `random` module are automatically available).
 
 ```bash
-$ carlo "max(0.5, random()**0.2)"
+$ python -m carlo "max(0.5, random()**0.2)"
 ```
     
 ![example screenshot showing a skewed-looking histogram](./screenshot2.png)
+
+
