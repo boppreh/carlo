@@ -111,19 +111,19 @@ class Digest:
             non_empty_bin_indexes = [i for i, count in enumerate(self.bins) if count]
             min_bin_i = non_empty_bin_indexes[0]
             max_bin_i = non_empty_bin_indexes[-1]
-            n_non_empty_bins = self.n_bins - (1 + max_bin_i - min_bin_i)
-            if value_bin_i > max_bin_i and value_bin_i - max_bin_i <= n_non_empty_bins:
+            n_empty_bins = self.n_bins - (1 + max_bin_i - min_bin_i)
+            if value_bin_i > max_bin_i and value_bin_i - max_bin_i <= n_empty_bins:
                 # We can remove empty bins from the left to fit the new value.
-                self.bins = self.bins[n_non_empty_bins:] + [0] * n_non_empty_bins
+                self.bins = self.bins[min_bin_i:max_bin_i+1] + [0] * n_empty_bins
                 # We move the histogram "window" all the way to the right.
-                self.bins_start += n_non_empty_bins * self.bins_width
-                self.bins_end += n_non_empty_bins * self.bins_width
-            elif value_bin_i < min_bin_i and min_bin_i - value_bin_i <= n_non_empty_bins:
+                self.bins_start += n_empty_bins * self.bins_width
+                self.bins_end += n_empty_bins * self.bins_width
+            elif value_bin_i < min_bin_i and min_bin_i - value_bin_i <= n_empty_bins:
                 # We can remove empty bins from the right to fit the new value.
-                self.bins = [0] * n_non_empty_bins + self.bins[:-n_non_empty_bins]
+                self.bins = [0] * n_empty_bins + self.bins[min_bin_i:max_bin_i+1]
                 # We move the histogram "window" all the way to the left.
-                self.bins_start -= n_non_empty_bins * self.bins_width
-                self.bins_end -= n_non_empty_bins * self.bins_width
+                self.bins_start -= n_empty_bins * self.bins_width
+                self.bins_end -= n_empty_bins * self.bins_width
             else:
                 # Value is too far away, shrink all bins by 2 and try again.
                 # Create new empty bins at the end. May not be right, but
