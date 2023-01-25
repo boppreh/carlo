@@ -4,6 +4,8 @@ Named after the Monte Carlo algorithm, this module displays interactive histogra
 
 Accepts lists, generators, numbers from stdin, or a function to be repeatdly evaluated. Displays data as histograms with automagic bin allocation, and extra statistics in legends.
 
+Note the bins will continually update as more data comes in, adjusting number and range to display the whole distribution. Care is taken to maintain the exact counts correct when redistributing the bins, without actually storing the samples in memory.
+
 ## Example 1
 
 Compare samples from one 20-sided dice vs three 6-sided dices.
